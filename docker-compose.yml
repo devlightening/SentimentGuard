@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: sg-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: sentimentguard
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: sg-mongo-express
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: "27017"
+      ME_CONFIG_BASICAUTH: "false"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: SentimentGuard.Api/Dockerfile
+    container_name: sg-backend
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    depends_on:
+      - mongodb
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Mongo__ConnectionString: mongodb://mongodb:27017
+      Mongo__DatabaseName: sentimentguard
+      FileStorage__UploadPath: /app/uploads
+      WorkerUrl: http://worker:8000
+    volumes:
+      - uploads:/app/uploads
+
+  worker:
+    build:
+      context: ./worker
+    container_name: sg-worker
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: sentimentguard
+      HMAC_SECRET: ${HMAC_SECRET:-sentimentguard-secret-key}
+      WORKER_PORT: "8000"
+    volumes:
+      - uploads:/app/uploads
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:5000
+    container_name: sg-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  uploads:

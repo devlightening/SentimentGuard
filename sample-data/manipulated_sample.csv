@@ -1,0 +1,6 @@
+user_name,email,user_id,comment,product_name,created_at
+Ahmet Yılmaz,ahmet@test.com,U001,Kargo çok geç geldi. Bir hafta beklettiniz.,Kulaklık,2024-01-10
+Ayşe Demir,ayse@test.com,U002,Ürün kalitesi harika! Çok memnun kaldım.,Telefon Kılıfı,2024-01-10
+TAMPERED_USER,tampered@hack.com,U003,THIS RECORD WAS SILENTLY MODIFIED TO SHOW CHAIN BREAK,Spor Ayakkabı,2024-01-11
+Fatma Şahin,fatma@test.com,U004,Beklediğim kalite bu değildi. Hayal kırıklığı.,Akıllı Saat,2024-01-11
+Ali Çelik,ali@test.com,U005,Mükemmel ürün çok hızlı kargo teşekkürler,Laptop Çantası,2024-01-12

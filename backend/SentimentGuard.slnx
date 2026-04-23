@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="SentimentGuard.Api/SentimentGuard.Api.csproj" />
+  <Project Path="SentimentGuard.Application/SentimentGuard.Application.csproj" />
+  <Project Path="SentimentGuard.Domain/SentimentGuard.Domain.csproj" />
+  <Project Path="SentimentGuard.Infrastructure/SentimentGuard.Infrastructure.csproj" />
+  <Project Path="SentimentGuard.Tests/SentimentGuard.Tests.csproj" />
+</Solution>
