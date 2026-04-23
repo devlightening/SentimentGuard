@@ -1,9 +1,10 @@
+using MongoDB.Driver;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using SentimentGuard.Domain.Enums;
 using SentimentGuard.Domain.Interfaces;
 using SentimentGuard.Infrastructure.Mongo;
-using MongoDB.Driver;
 
 namespace SentimentGuard.Infrastructure.Services;
 
@@ -32,16 +33,85 @@ public class PdfReportService : IReportService
         var (chainValid, brokenAt) = await _hashChain.VerifyChainAsync(jobId);
         var finalHash = results.LastOrDefault()?.CurrentHash ?? "N/A";
 
+        int total = results.Count;
+        int positive = results.Count(r => r.Sentiment == SentimentLabel.Positive);
+        int negative = results.Count(r => r.Sentiment == SentimentLabel.Negative);
+        int neutral = results.Count(r => r.Sentiment == SentimentLabel.Neutral);
+
+        int complaint = results.Count(r => r.Category == CategoryLabel.Complaint);
+        int praise = results.Count(r => r.Category == CategoryLabel.Praise);
+        int question = results.Count(r => r.Category == CategoryLabel.Question);
+        int disappointment = results.Count(r => r.Category == CategoryLabel.Disappointment);
+        int other = results.Count(r => r.Category == CategoryLabel.Other || r.Category == null);
+
         var topComments = results
-            .GroupBy(r => r.OriginalComment.Trim().ToLower())
+            .GroupBy(r => (r.OriginalComment ?? string.Empty).Trim().ToLowerInvariant())
             .OrderByDescending(g => g.Count())
-            .Take(10)
-            .Select(g => (Comment: g.First().OriginalComment, Count: g.Count()))
+            .Take(12)
+            .Select(g => (Comment: g.First().OriginalComment, Count: g.Count(), Sample: g.First()))
             .ToList();
 
-        int positive = results.Count(r => r.Sentiment == Domain.Enums.SentimentLabel.Positive);
-        int negative = results.Count(r => r.Sentiment == Domain.Enums.SentimentLabel.Negative);
-        int neutral = results.Count(r => r.Sentiment == Domain.Enums.SentimentLabel.Neutral);
+        string NowUtc() => DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") + " UTC";
+        string FmtUtc(DateTime dt) => dt.ToString("yyyy-MM-dd HH:mm:ss") + " UTC";
+
+        string ShortHash(string h, int take = 56)
+        {
+            if (string.IsNullOrWhiteSpace(h)) return "N/A";
+            return h.Length > take ? h[..take] + "..." : h;
+        }
+
+        string ShortText(string text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length > max ? text[..max] + "..." : text;
+        }
+
+        void Divider(IContainer c) =>
+            c.Height(1).Background(Colors.Grey.Lighten2);
+
+        void MetricBox(IContainer c, string label, string value, string note, string color)
+        {
+            c.Border(1).BorderColor(Colors.Grey.Lighten2).Background(Colors.White)
+                .Padding(12)
+                .Column(col =>
+                {
+                    col.Item().Text(label).FontSize(9).FontColor(Colors.Grey.Darken1);
+                    col.Item().PaddingTop(2).Text(value).FontSize(18).Bold().FontColor(color);
+                    if (!string.IsNullOrWhiteSpace(note))
+                        col.Item().PaddingTop(4).Text(note).FontSize(9).FontColor(Colors.Grey.Medium);
+                });
+        }
+
+        void BarRow(IContainer c, string label, int count, int totalCount, string barColor)
+        {
+            var pct = totalCount <= 0 ? 0 : (double)count / totalCount;
+            var fill = pct <= 0 ? 0f : (float)Math.Clamp(pct, 0.01, 1.0);
+            var rest = 1f - fill;
+
+            c.Row(row =>
+            {
+                row.ConstantItem(88).AlignLeft()
+                    .Text(label).FontSize(10).FontColor(Colors.Grey.Darken2);
+
+                row.RelativeItem().Height(10).AlignMiddle().Row(r =>
+                {
+                    // Two-segment bar without Layer/CornerRadius to match older QuestPDF APIs.
+                    if (fill <= 0)
+                    {
+                        r.RelativeItem().Background(Colors.Grey.Lighten3);
+                        return;
+                    }
+
+                    r.RelativeItem(fill).Background(barColor);
+                    if (rest > 0)
+                        r.RelativeItem(rest).Background(Colors.Grey.Lighten3);
+                });
+
+                row.ConstantItem(72).AlignRight()
+                    .Text($"{count:n0} ({pct:P0})").FontSize(10).FontColor(Colors.Grey.Darken2);
+            });
+        }
 
         return Document.Create(container =>
         {
@@ -49,76 +119,152 @@ public class PdfReportService : IReportService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(40);
-                page.DefaultTextStyle(x => x.FontSize(11));
+                page.DefaultTextStyle(x => x.FontSize(11).FontColor(Colors.Grey.Darken4));
 
                 page.Header().Column(col =>
                 {
-                    col.Item().Text("SentimentGuard — Analysis Report").FontSize(20).Bold();
-                    col.Item().Text($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC").FontSize(9).FontColor(Colors.Grey.Medium);
+                    col.Item().Text("SentimentGuard - Analysis Report").FontSize(20).Bold();
+                    col.Item().Text($"Generated: {NowUtc()}").FontSize(9).FontColor(Colors.Grey.Medium);
                 });
 
                 page.Content().Column(col =>
                 {
-                    col.Item().PaddingTop(16).Text("Job Overview").FontSize(14).Bold();
+                    col.Spacing(10);
+
+                    col.Item().PaddingTop(8).Text("Overview").FontSize(14).Bold();
+                    col.Item().Text(
+                            "This report summarizes a batch sentiment run over the uploaded dataset. " +
+                            "Identity fields are masked before storage, and a hash chain allows integrity verification.")
+                        .FontSize(10).FontColor(Colors.Grey.Darken1);
+
+                    col.Item().PaddingTop(6).Element(Divider);
+
+                    col.Item().Text("Job Details").FontSize(14).Bold();
                     col.Item().Table(table =>
                     {
-                        table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(2); });
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.ConstantColumn(110);
+                            c.RelativeColumn();
+                        });
+
                         void Row(string k, string v)
                         {
-                            table.Cell().Text(k).Bold();
-                            table.Cell().Text(v);
+                            table.Cell().PaddingVertical(3)
+                                .Text(k).FontSize(10).FontColor(Colors.Grey.Darken2).SemiBold();
+                            table.Cell().PaddingVertical(3)
+                                .Text(v).FontSize(10).FontColor(Colors.Grey.Darken4);
                         }
+
                         Row("Job ID", job.Id);
-                        Row("File Name", job.FileName);
+                        Row("File name", job.FileName);
                         Row("Status", job.Status.ToString());
-                        Row("Created At", job.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss") + " UTC");
-                        Row("Total Records", results.Count.ToString());
+                        Row("Created", FmtUtc(job.CreatedAt));
+                        Row("Completed", job.CompletedAt.HasValue ? FmtUtc(job.CompletedAt.Value) : "-");
+                        Row("Records processed", total.ToString("n0"));
                     });
 
-                    col.Item().PaddingTop(16).Text("Sentiment Distribution").FontSize(14).Bold();
-                    col.Item().Table(table =>
+                    col.Item().PaddingTop(6).Row(row =>
                     {
-                        table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); });
-                        table.Cell().Text("Sentiment").Bold();
-                        table.Cell().Text("Count").Bold();
-                        table.Cell().Text("Positive"); table.Cell().Text(positive.ToString());
-                        table.Cell().Text("Negative"); table.Cell().Text(negative.ToString());
-                        table.Cell().Text("Neutral"); table.Cell().Text(neutral.ToString());
+                        row.Spacing(10);
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Records", total.ToString("n0"), "Total analyzed rows", Colors.Blue.Darken2));
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Positive", positive.ToString("n0"), "Share of all records", Colors.Green.Darken2));
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Negative", negative.ToString("n0"), "Share of all records", Colors.Red.Darken2));
+                    });
+
+                    col.Item().Row(row =>
+                    {
+                        row.Spacing(10);
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Neutral", neutral.ToString("n0"), "Share of all records", Colors.Grey.Darken2));
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Integrity", chainValid ? "VALID" : "BROKEN",
+                                chainValid ? "No tampering detected" : $"Broken at index {brokenAt}",
+                                chainValid ? Colors.Green.Darken2 : Colors.Red.Darken2));
+                        row.RelativeItem().Element(c =>
+                            MetricBox(c, "Final hash", ShortHash(finalHash, 22), "Chain tail (summary)", Colors.Grey.Darken2));
+                    });
+
+                    col.Item().PaddingTop(10).Text("Sentiment Distribution").FontSize(14).Bold();
+                    col.Item().Column(bars =>
+                    {
+                        bars.Spacing(6);
+                        bars.Item().Element(c => BarRow(c, "Positive", positive, total, "#22c55e"));
+                        bars.Item().Element(c => BarRow(c, "Negative", negative, total, "#ef4444"));
+                        bars.Item().Element(c => BarRow(c, "Neutral", neutral, total, "#64748b"));
+                    });
+
+                    col.Item().PaddingTop(10).Text("Category Breakdown (MVP rules)").FontSize(14).Bold();
+                    col.Item().Column(bars =>
+                    {
+                        bars.Spacing(6);
+                        bars.Item().Element(c => BarRow(c, "Complaint", complaint, total, "#f97316"));
+                        bars.Item().Element(c => BarRow(c, "Question", question, total, "#22d3ee"));
+                        bars.Item().Element(c => BarRow(c, "Praise", praise, total, "#a78bfa"));
+                        bars.Item().Element(c => BarRow(c, "Disappoint", disappointment, total, "#fb7185"));
+                        if (other > 0)
+                            bars.Item().Element(c => BarRow(c, "Other", other, total, "#94a3b8"));
                     });
 
                     if (topComments.Any())
                     {
-                        col.Item().PaddingTop(16).Text("Top Repeated Comments").FontSize(14).Bold();
-                        col.Item().Table(table =>
+                        col.Item().PaddingTop(14).Text("Top Repeated Comments").FontSize(14).Bold();
+                        col.Item().Text("Helps identify recurring issues and repeated feedback patterns.")
+                            .FontSize(10).FontColor(Colors.Grey.Darken1);
+
+                        col.Item().PaddingTop(4).Table(table =>
                         {
-                            table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(); });
-                            table.Cell().Text("Comment").Bold();
-                            table.Cell().Text("Count").Bold();
-                            foreach (var (comment, count) in topComments)
+                            table.ColumnsDefinition(c =>
                             {
-                                table.Cell().Text(comment.Length > 80 ? comment[..80] + "…" : comment);
-                                table.Cell().Text(count.ToString());
+                                c.RelativeColumn(5);
+                                c.ConstantColumn(56);
+                                c.ConstantColumn(72);
+                                c.ConstantColumn(88);
+                            });
+
+                            table.Header(h =>
+                            {
+                                h.Cell().PaddingVertical(6).Text("Comment").SemiBold().FontSize(10);
+                                h.Cell().PaddingVertical(6).AlignRight().Text("Count").SemiBold().FontSize(10);
+                                h.Cell().PaddingVertical(6).Text("Sentiment").SemiBold().FontSize(10);
+                                h.Cell().PaddingVertical(6).Text("Category").SemiBold().FontSize(10);
+                                h.Cell().ColumnSpan(4).Element(Divider);
+                            });
+
+                            foreach (var (comment, count, sample) in topComments)
+                            {
+                                table.Cell().PaddingVertical(6).Text(ShortText(comment, 150)).FontSize(10);
+                                table.Cell().PaddingVertical(6).AlignRight().Text(count.ToString("n0")).FontSize(10);
+                                table.Cell().PaddingVertical(6).Text(sample.Sentiment.ToString()).FontSize(10);
+                                table.Cell().PaddingVertical(6).Text(sample.Category?.ToString() ?? "Other").FontSize(10);
                             }
                         });
                     }
 
-                    col.Item().PaddingTop(16).Text("Security & Integrity").FontSize(14).Bold();
+                    col.Item().PaddingTop(14).Text("Security & Integrity Notes").FontSize(14).Bold();
                     col.Item().Table(table =>
                     {
-                        table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(3); });
+                        table.ColumnsDefinition(c => { c.ConstantColumn(130); c.RelativeColumn(); });
+
                         void Row(string k, string v)
                         {
-                            table.Cell().Text(k).Bold();
-                            table.Cell().Text(v);
+                            table.Cell().PaddingVertical(3).Text(k).FontSize(10).SemiBold();
+                            table.Cell().PaddingVertical(3).Text(v).FontSize(10).FontColor(Colors.Grey.Darken1);
                         }
-                        Row("Chain Status", chainValid ? "VALID — No tampering detected" : $"BROKEN at index {brokenAt}");
-                        Row("Final Hash", finalHash.Length > 40 ? finalHash[..40] + "…" : finalHash);
+
+                        Row("Pseudo-anonymization", "Identity fields are masked using deterministic keyed hashing (HMAC-SHA256).");
+                        Row("Hash chain", "Each record stores prevHash/currentHash. Any DB change breaks the chain from that point.");
+                        Row("Chain status", chainValid ? "VALID - No tampering detected" : $"BROKEN at index {brokenAt}");
+                        Row("Final hash", ShortHash(finalHash, 64));
                     });
                 });
 
                 page.Footer().AlignCenter().Text(x =>
                 {
-                    x.Span("SentimentGuard MVP — Academic Project").FontSize(8).FontColor(Colors.Grey.Medium);
+                    x.Span("SentimentGuard MVP - Academic Project").FontSize(8).FontColor(Colors.Grey.Medium);
                 });
             });
         }).GeneratePdf();

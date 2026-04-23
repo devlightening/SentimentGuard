@@ -56,19 +56,31 @@ export default function CategoryChart({ summary }: { summary: JobSummary }) {
           tickLine={false}
         />
         <Tooltip
-          contentStyle={{
-            backgroundColor: "white",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            color: "var(--ink)",
-            fontSize: "12px",
-          }}
           cursor={{ fill: "rgba(15,23,42,0.04)" }}
-          formatter={(value: unknown, name: unknown) => {
-            const v = Number(value ?? 0);
-            return [v.toLocaleString(), labelForCategory(t, name as CategoryKey)];
+          // Custom renderer: Recharts formatter's `name` isn't the category key for Bar charts.
+          content={({ active, payload }: any) => {
+            if (!active || !payload || payload.length === 0) return null;
+            const p0 = payload[0];
+            const key = (p0?.payload?.key ?? "") as CategoryKey;
+            const label = labelForCategory(t, key);
+            const v = Number(p0?.value ?? 0);
+            return (
+              <div
+                className="px-3 py-2 rounded-xl"
+                style={{
+                  backgroundColor: "white",
+                  border: "1px solid var(--border)",
+                  color: "var(--ink)",
+                  fontSize: "12px",
+                  boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
+                }}
+              >
+                <div className="font-semibold" style={{ marginBottom: 2 }}>
+                  {label}: {v.toLocaleString()}
+                </div>
+              </div>
+            );
           }}
-          labelFormatter={() => ""}
         />
         <Bar dataKey="value" radius={[6, 6, 0, 0]}>
           {data.map((_, i) => (
