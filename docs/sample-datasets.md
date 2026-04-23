@@ -1,23 +1,27 @@
 # Sample Datasets
 
-## product_reviews_small.csv
-- 20 rows
-- Turkish and English comments
-- Use for: quick functional testing
+All sample datasets are under `sample-data/`.
 
-## product_reviews_large.csv
-- 500 rows
-- Cyclic comment patterns for repeating comment demo
-- Use for: batch processing / PySpark demo
+## Included Files
 
-## manipulated_sample.csv
-- 6 rows
-- Row 3 is intentionally wrong (tampered label in comment)
-- Use for: demo of hash chain failure detection
+- `product_reviews_tr_20000.csv`
+  - 20,000 Turkish records
+  - Good for batch demo and dashboards
+- `product_reviews_en_20000.csv`
+  - 20,000 English records
+- `product_reviews_mixed_20000.csv`
+  - 20,000 mixed Turkish + English
 
-## Required Columns
+## Columns
+
+Recommended columns:
+
+```text
+user_name,email,user_id,comment,product_name,created_at
 ```
-user_name, email, user_id, comment, product_name, created_at
-```
 
-Minimum required: any one identity field + comment field.
+Minimum required:
+
+- at least one identity field (for masking demo), and
+- one comment field (`comment`, or a similar text column)
+

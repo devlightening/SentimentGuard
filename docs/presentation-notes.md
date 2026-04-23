@@ -1,23 +1,25 @@
 # Presentation Notes
 
-## Big Data Analytics Course
+## BM 436 - Buyuk Veri Analizine Giris
 
-- PySpark pipeline processes records as RDD (Resilient Distributed Dataset)
-- `sc.sparkContext.parallelize(rows)` distributes data across available cores
-- `.map(process_row).collect()` applies transformations in parallel
-- Scales to cluster deployment with zero code changes
-- MongoDB is a NoSQL document store — demonstrates non-relational data handling
-- Batch processing: all records in one job run
+- PySpark batch pipeline: records are processed with Spark transformations in parallel.
+- Local mode still demonstrates the distributed programming model.
+- Batch processing: a whole dataset is processed as one "analysis job".
+- MongoDB is used as a NoSQL document store for job/result persistence.
+- The architecture can scale: the same pipeline can run on a real cluster with minimal changes.
 
-## Information Security Course
+## BM 404 - Bilgi Guvenligi
 
-- Pseudo-anonymization: identity fields are masked, never stored in plaintext
-- HMAC-SHA256 with server-side secret key — keyed hashing, not plain hash
-- Hash chain: each record's integrity is bound to all prior records
-- Tamper detection: modifying any stored value breaks the chain from that point
-- Chain verification endpoint provides forensic auditability
+- Privacy: pseudo-anonymization with deterministic keyed hashing (HMAC-SHA256).
+- Plaintext identity fields are not persisted; only masked values are stored.
+- Integrity: hash chain (`prevHash`, `currentHash`) makes any DB tampering detectable.
+- Verification: a backend endpoint recomputes the chain and reports where it breaks.
+- Audit: PDF export includes chain status and the final hash.
 
-## Why Both Courses at Once?
+## Why Combine Both Courses?
 
-Privacy and integrity are inherent requirements of any large-scale analytics system.
-The project demonstrates that security is not an add-on but part of the core design.
+In real systems, analytics pipelines must be secure by design:
+
+- privacy is needed when processing user-generated content
+- integrity is required when results must be trusted (audit, reporting, academic evaluation)
+

@@ -5,6 +5,16 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5000",
 });
 
+const getDemoUser = (): string =>
+  (localStorage.getItem("sg_user") || "demo").trim() || "demo";
+
+api.interceptors.request.use((config) => {
+  config.headers = config.headers ?? {};
+  // Simple multi-user demo without auth: lets the backend scope jobs/results per user.
+  (config.headers as any)["X-Demo-User"] = getDemoUser();
+  return config;
+});
+
 export const uploadFile = async (file: File): Promise<Job> => {
   const form = new FormData();
   form.append("file", file);
@@ -43,4 +53,4 @@ export const verifyChain = async (id: string): Promise<ChainVerification> => {
 };
 
 export const getReportUrl = (id: string): string =>
-  `${api.defaults.baseURL}/api/jobs/${id}/report`;
+  `${api.defaults.baseURL}/api/jobs/${id}/report?user=${encodeURIComponent(getDemoUser())}`;

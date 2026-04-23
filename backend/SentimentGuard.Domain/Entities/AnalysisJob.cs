@@ -11,6 +11,7 @@ public class AnalysisJob
     public string Id { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
     [BsonRepresentation(BsonType.String)]
     public JobStatus Status { get; set; } = JobStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

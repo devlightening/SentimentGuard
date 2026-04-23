@@ -25,21 +25,55 @@ public class JobsController : ControllerBase
     [HttpGet("{id}/summary")]
     public async Task<IActionResult> GetSummary(string id)
     {
-        var summary = await _jobService.GetSummaryAsync(id);
-        return summary is null ? NotFound() : Ok(summary);
+        try
+        {
+            var summary = await _jobService.GetSummaryAsync(id);
+            return summary is null ? NotFound() : Ok(summary);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
     }
 
     [HttpGet("{id}/results")]
-    public async Task<IActionResult> GetResults(string id) =>
-        Ok(await _jobService.GetResultsAsync(id));
+    public async Task<IActionResult> GetResults(string id)
+    {
+        try
+        {
+            return Ok(await _jobService.GetResultsAsync(id));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
 
     [HttpGet("{id}/top-comments")]
-    public async Task<IActionResult> GetTopComments(string id) =>
-        Ok(await _jobService.GetTopCommentsAsync(id));
+    public async Task<IActionResult> GetTopComments(string id)
+    {
+        try
+        {
+            return Ok(await _jobService.GetTopCommentsAsync(id));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
 
     [HttpGet("{id}/verify-chain")]
-    public async Task<IActionResult> VerifyChain(string id) =>
-        Ok(await _jobService.VerifyChainAsync(id));
+    public async Task<IActionResult> VerifyChain(string id)
+    {
+        try
+        {
+            return Ok(await _jobService.VerifyChainAsync(id));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
 
     [HttpGet("{id}/report")]
     public async Task<IActionResult> GetReport(string id)

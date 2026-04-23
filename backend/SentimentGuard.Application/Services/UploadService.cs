@@ -9,12 +9,18 @@ public class UploadService : IUploadService
     private readonly IAnalysisJobRepository _jobRepo;
     private readonly IWorkerTrigger _workerTrigger;
     private readonly string _uploadPath;
+    private readonly IUserContext _userContext;
 
-    public UploadService(IAnalysisJobRepository jobRepo, IWorkerTrigger workerTrigger, IFileStorageOptions options)
+    public UploadService(
+        IAnalysisJobRepository jobRepo,
+        IWorkerTrigger workerTrigger,
+        IFileStorageOptions options,
+        IUserContext userContext)
     {
         _jobRepo = jobRepo;
         _workerTrigger = workerTrigger;
         _uploadPath = options.UploadPath;
+        _userContext = userContext;
     }
 
     public async Task<JobDto> HandleUploadAsync(UploadRequest request)
@@ -35,6 +41,7 @@ public class UploadService : IUploadService
             Id = Guid.NewGuid().ToString(),
             FileName = request.FileName,
             FilePath = fullPath,
+            UserId = _userContext.UserId,
             CreatedAt = DateTime.UtcNow
         };
 

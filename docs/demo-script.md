@@ -1,132 +1,99 @@
-# SentimentGuard — Demo Script (10–15 minutes)
+# SentimentGuard - Demo Script (10-15 minutes)
 
-## Before You Start
+## Setup (Before You Start)
 
-1. Run `docker-compose up --build` (or start services locally)
-2. Open http://localhost:3000 in browser
-3. Have `sample-data/product_reviews_small.csv` ready
-4. Have `sample-data/manipulated_sample.csv` ready
-5. Have MongoDB Compass open (optional, for visual verification)
+1. Run:
 
----
+```bash
+docker compose up -d --build
+```
 
-## Part 1 — Introduction (1 minute)
+2. Open:
 
-> "SentimentGuard is a platform that solves two real problems at once:
-> 1. **Big Data Analytics**: analyzing large volumes of text feedback at scale using Apache Spark
-> 2. **Information Security**: protecting identity privacy and proving result integrity"
+- Web: http://localhost:3000
+- API Swagger: http://localhost:5000/swagger
+- Mongo UI (optional): http://localhost:8081
 
-Show the architecture slide or the `docs/architecture.md` diagram.
+3. Prepare a dataset from `sample-data/`:
 
----
+- `product_reviews_tr_20000.csv` (20,000 rows)
+- `product_reviews_en_20000.csv` (20,000 rows)
+- `product_reviews_mixed_20000.csv` (20,000 rows)
 
-## Part 2 — Dataset Upload (2 minutes)
+## Part 1 - What It Is (1 minute)
 
-1. Open http://localhost:3000
-2. Drag and drop `product_reviews_small.csv` onto the upload zone
-3. Click "Start Analysis" (or it auto-triggers)
+Explain:
 
-> "The frontend sends the file to our ASP.NET API. The API stores the file and creates an analysis job in MongoDB. It then calls the Python worker to start the pipeline."
+- Big Data Analytics: PySpark batch processing
+- Information Security: pseudo-anonymization + hash-chain integrity
 
-4. Watch the job status change from Pending → Running → Completed
-5. Navigate to the Job Detail page
+## Part 2 - Upload And Job Creation (2 minutes)
 
----
+1. Open the web UI.
+2. Upload one of the CSV files.
+3. Show that a new "analysis job" appears with status changes (Pending -> Running -> Completed).
 
-## Part 3 — Anonymization Proof (2 minutes)
+Explain:
 
-> "Before any analysis, sensitive identity fields are masked using HMAC-SHA256."
+- The backend stores the upload and creates `analysis_jobs` in MongoDB.
+- The backend triggers the worker to run the batch pipeline.
 
-1. Open the Job Detail — Results section
-2. Show the `maskedUser` column — it's a base64url-encoded hash, not a real name or email
-3. Point out: "The original `ahmet@test.com` is now stored as this 43-character string"
-4. Explain: "It's deterministic — the same email always maps to the same hash under the same secret key. This allows grouping without exposing identity."
+## Part 3 - Privacy (2 minutes)
 
-If MongoDB Compass is open, show the `analysis_results` collection directly.
+Open the job results and show:
 
----
+- `maskedUser` values are deterministic HMAC outputs.
+- No plaintext identity values are stored.
 
-## Part 4 — Sentiment Dashboard (3 minutes)
+Explain:
 
-1. Point to the sentiment pie chart: Positive / Negative / Neutral breakdown
-2. Point to the category bar chart: Complaint / Question / Praise / Disappointment
-3. Scroll to "Top Repeated Comments" section
-4. Show the top 3 repeated comments with their sentiment labels
+- HMAC-SHA256 is a keyed hash, which is safer than plain SHA-256 for pseudo-anonymization.
+- Deterministic mapping allows grouping without exposing identity.
 
-> "PySpark processes all rows as a distributed RDD even in local mode. The pipeline would scale horizontally on a real cluster with zero code changes."
-
----
-
-## Part 5 — Hash Chain Verification (3 minutes)
-
-1. Click "Verify Chain" button
-2. Show the green "Chain is intact" badge
-
-> "Every result record in MongoDB stores two hashes: prev_hash (the previous record's hash) and current_hash = SHA256(canonical_payload + prev_hash). This creates a tamper-evident chain."
-
-3. Show the final hash value at the bottom
-
-**Now demonstrate chain failure:**
-
-4. Open MongoDB Compass → `sentimentguard` → `analysis_results`
-5. Find any record — double-click to edit
-6. Change the `original_comment` field to any different value
-7. Save the record
-8. Go back to the UI and click "Verify Chain" again
-9. Show the red "Chain broken at record index N" badge
-
-> "The system immediately detected that record #N was modified. In a forensic context, this proves the results were tampered with after analysis."
-
----
-
-## Part 6 — PDF Report (1 minute)
-
-1. Click "Download PDF" button
-2. Open the downloaded PDF
+## Part 4 - Dashboard (3 minutes)
 
 Show:
-- Job ID and filename
-- Sentiment distribution summary
-- Top repeated comments
-- Chain integrity status
-- Final hash value
-- Generated timestamp
 
-> "The report is suitable for audit or academic submission."
+- sentiment distribution chart (Positive/Negative/Neutral)
+- category breakdown chart (Complaint/Praise/Question/Disappointment/Other)
+- top repeated comments section
 
----
+Explain:
 
-## Part 7 — Large Dataset (optional, 1 minute)
+- This is a batch-style analytics workflow: a whole dataset is processed as one job.
+- Even in local mode, PySpark demonstrates the distributed programming model.
 
-1. Upload `product_reviews_large.csv` (500 rows)
-2. Watch the progress counter
-3. Show that PySpark processed 500 records in batch
+## Part 5 - Integrity (Hash Chain) (3 minutes)
 
----
+1. Click "Verify Chain" in the UI.
+2. Show the "valid" result and the final hash.
 
-## Part 8 — Academic Defense Points (2 minutes)
+Explain:
 
-### Why Spark?
-> "Spark enables distributed batch processing. The same pipeline code would run on a 10-node cluster processing millions of rows. Local mode is used here for the demo."
+- each record stores `prevHash` and `currentHash`
+- `currentHash` depends on the previous record, so any tampering is detectable
 
-### Why MongoDB?
-> "Flexible document storage fits the variable structure of analysis results. NoSQL gives us fast insertion and schema flexibility for different dataset formats."
+Optional tamper demo:
 
-### Why hash chain instead of blockchain?
-> "We need integrity verification in a centralized system without the complexity of distributed consensus. The hash chain achieves tamper-detection with O(n) verification."
+1. Open mongo-express (or MongoDB Compass).
+2. Edit a single field (example: `originalComment`) in `analysis_results`.
+3. Run verification again and show that it reports the broken index.
 
-### Why HMAC instead of plain SHA-256?
-> "Keyed hashing prevents rainbow table attacks. An adversary without the secret key cannot reproduce or reverse the masked values."
+## Part 6 - PDF Export (1 minute)
 
----
+1. Click "Download PDF".
+2. Open the PDF and show:
+   - job metadata
+   - sentiment and category distributions
+   - top repeated comments
+   - chain verification status and final hash
 
-## Common Questions
+## Common Questions (Fast Answers)
 
-**Q: What if the file has different column names?**
-A: The worker looks for `comment`, `text`, or `review` fields. Column mapping can be extended.
+- "Is the NLP perfect?"
+  - No. MVP uses polarity + keyword rules. Architecture allows swapping in a better model.
 
-**Q: Is the classification perfect?**
-A: No. The MVP uses TextBlob polarity + keyword rules. The architecture is designed for model replacement — swap `classify_sentiment()` in `classifier.py` with any ML model.
+- "Is this real big data?"
+  - Academic scope: the goal is to demonstrate batch processing and the big-data programming model.
+    20,000 rows is sufficient for a clean demo on a laptop.
 
-**Q: How would this scale?**
-A: Replace local PySpark with a Spark cluster, add a message queue (Kafka/RabbitMQ) for job dispatch, and use MongoDB replica set for HA.

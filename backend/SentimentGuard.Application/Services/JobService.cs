@@ -9,35 +9,44 @@ public class JobService : IJobService
     private readonly IAnalysisResultRepository _resultRepo;
     private readonly IHashChainService _hashChain;
     private readonly IReportService _reportService;
+    private readonly IUserContext _userContext;
 
     public JobService(
         IAnalysisJobRepository jobRepo,
         IAnalysisResultRepository resultRepo,
         IHashChainService hashChain,
-        IReportService reportService)
+        IReportService reportService,
+        IUserContext userContext)
     {
         _jobRepo = jobRepo;
         _resultRepo = resultRepo;
         _hashChain = hashChain;
         _reportService = reportService;
+        _userContext = userContext;
     }
 
     public async Task<IEnumerable<JobDto>> GetAllJobsAsync()
     {
         var jobs = await _jobRepo.GetAllAsync();
+        var userId = _userContext.UserId;
+        jobs = jobs.Where(j => string.IsNullOrWhiteSpace(j.UserId) ? userId == "demo" : j.UserId == userId);
         return jobs.Select(MapToDto);
     }
 
     public async Task<JobDto?> GetJobByIdAsync(string id)
     {
         var job = await _jobRepo.GetByIdAsync(id);
-        return job is null ? null : MapToDto(job);
+        if (job is null) return null;
+        var userId = _userContext.UserId;
+        var owner = string.IsNullOrWhiteSpace(job.UserId) ? "demo" : job.UserId;
+        if (!string.Equals(owner, userId, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return MapToDto(job);
     }
 
     public async Task<SummaryDto?> GetSummaryAsync(string jobId)
     {
-        var job = await _jobRepo.GetByIdAsync(jobId);
-        if (job is null) return null;
+        var job = await RequireOwnedJob(jobId);
 
         var summary = await _resultRepo.GetSummaryByJobIdAsync(jobId);
         return new SummaryDto
@@ -58,18 +67,21 @@ public class JobService : IJobService
 
     public async Task<IEnumerable<ResultDto>> GetResultsAsync(string jobId)
     {
+        _ = await RequireOwnedJob(jobId);
         var results = await _resultRepo.GetByJobIdAsync(jobId);
         return results.Select(MapResultToDto);
     }
 
     public async Task<IEnumerable<ResultDto>> GetTopCommentsAsync(string jobId)
     {
+        _ = await RequireOwnedJob(jobId);
         var results = await _resultRepo.GetTopCommentsByJobIdAsync(jobId);
         return results.Select(MapResultToDto);
     }
 
     public async Task<ChainVerificationDto> VerifyChainAsync(string jobId)
     {
+        _ = await RequireOwnedJob(jobId);
         var (isValid, brokenAt) = await _hashChain.VerifyChainAsync(jobId);
         return new ChainVerificationDto
         {
@@ -81,7 +93,21 @@ public class JobService : IJobService
     }
 
     public async Task<byte[]> GetReportAsync(string jobId) =>
-        await _reportService.GeneratePdfReportAsync(jobId);
+        await _reportService.GeneratePdfReportAsync((await RequireOwnedJob(jobId)).Id);
+
+    private async Task<Domain.Entities.AnalysisJob> RequireOwnedJob(string jobId)
+    {
+        var job = await _jobRepo.GetByIdAsync(jobId);
+        if (job is null)
+            throw new InvalidOperationException("Job not found.");
+
+        var userId = _userContext.UserId;
+        var owner = string.IsNullOrWhiteSpace(job.UserId) ? "demo" : job.UserId;
+        if (!string.Equals(owner, userId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Job not found.");
+
+        return job;
+    }
 
     private static JobDto MapToDto(Domain.Entities.AnalysisJob job) => new()
     {

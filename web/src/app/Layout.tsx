@@ -1,10 +1,16 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { ShieldIcon } from "../components/Icons";
 import { useI18n } from "../i18n/I18nProvider";
+import { useEffect, useState } from "react";
 
 export default function Layout() {
   const { pathname } = useLocation();
   const { t, lang, setLang } = useI18n();
+  const [user, setUser] = useState<string>(() => (localStorage.getItem("sg_user") || "demo").trim() || "demo");
+
+  useEffect(() => {
+    localStorage.setItem("sg_user", user);
+  }, [user]);
 
   const isActive = (to: string) =>
     to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -100,6 +106,49 @@ export default function Layout() {
                 }}
               >
                 TR
+              </button>
+            </div>
+
+            <div
+              className="ml-2 flex items-center rounded-xl overflow-hidden sg-chip"
+              aria-label="Demo user"
+              title="Demo user (scopes jobs/results in the API)"
+            >
+              <button
+                type="button"
+                onClick={() => setUser("demo")}
+                className="px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  color: user === "demo" ? "var(--ink)" : "var(--muted2)",
+                  backgroundColor:
+                    user === "demo" ? "rgba(15,23,42,0.06)" : "transparent",
+                }}
+              >
+                Demo
+              </button>
+              <button
+                type="button"
+                onClick={() => setUser("ali")}
+                className="px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  color: user === "ali" ? "var(--ink)" : "var(--muted2)",
+                  backgroundColor:
+                    user === "ali" ? "rgba(15,23,42,0.06)" : "transparent",
+                }}
+              >
+                Ali
+              </button>
+              <button
+                type="button"
+                onClick={() => setUser("ayse")}
+                className="px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  color: user === "ayse" ? "var(--ink)" : "var(--muted2)",
+                  backgroundColor:
+                    user === "ayse" ? "rgba(15,23,42,0.06)" : "transparent",
+                }}
+              >
+                Ayse
               </button>
             </div>
           </div>

@@ -3,9 +3,11 @@ using SentimentGuard.Domain.Interfaces;
 using SentimentGuard.Infrastructure.Mongo;
 using SentimentGuard.Infrastructure.Repositories;
 using SentimentGuard.Infrastructure.Services;
+using SentimentGuard.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<MongoSettings>(builder.Configuration.GetSection("Mongo"));
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection("FileStorage"));
 builder.Services.AddSingleton<MongoDbContext>();
@@ -14,6 +16,7 @@ builder.Services.AddScoped<IAnalysisJobRepository, AnalysisJobRepository>();
 builder.Services.AddScoped<IAnalysisResultRepository, AnalysisResultRepository>();
 builder.Services.AddScoped<IHashChainService, HashChainService>();
 builder.Services.AddScoped<IReportService, PdfReportService>();
+builder.Services.AddScoped<IUserContext, HeaderUserContext>();
 builder.Services.AddScoped<IUploadService, UploadService>();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddTransient<IWorkerTrigger, WorkerTrigger>();
