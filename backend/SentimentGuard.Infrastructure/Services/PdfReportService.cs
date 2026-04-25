@@ -67,6 +67,9 @@ public class PdfReportService : IReportService
             return text.Length > max ? text[..max] + "..." : text;
         }
 
+        double Pct(int count) => total <= 0 ? 0 : (double)count / total;
+        string FmtPct(int count) => $"{Pct(count):P0}";
+
         void Divider(IContainer c) =>
             c.Height(1).Background(Colors.Grey.Lighten2);
 
@@ -119,7 +122,14 @@ public class PdfReportService : IReportService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(40);
-                page.DefaultTextStyle(x => x.FontSize(11).FontColor(Colors.Grey.Darken4));
+                // Reduce ligatures (fi/fl) so copy/paste and text extraction from PDF is cleaner.
+                page.DefaultTextStyle(x => x
+                    .FontFamily("DejaVu Sans")
+                    .DisableFontFeature("liga")
+                    .DisableFontFeature("clig")
+                    .DisableFontFeature("calt")
+                    .FontSize(11)
+                    .FontColor(Colors.Grey.Darken4));
 
                 page.Header().Column(col =>
                 {
@@ -170,22 +180,45 @@ public class PdfReportService : IReportService
                         row.RelativeItem().Element(c =>
                             MetricBox(c, "Records", total.ToString("n0"), "Total analyzed rows", Colors.Blue.Darken2));
                         row.RelativeItem().Element(c =>
-                            MetricBox(c, "Positive", positive.ToString("n0"), "Share of all records", Colors.Green.Darken2));
+                            MetricBox(c, "Positive", positive.ToString("n0"), $"Share: {FmtPct(positive)}", Colors.Green.Darken2));
                         row.RelativeItem().Element(c =>
-                            MetricBox(c, "Negative", negative.ToString("n0"), "Share of all records", Colors.Red.Darken2));
+                            MetricBox(c, "Negative", negative.ToString("n0"), $"Share: {FmtPct(negative)}", Colors.Red.Darken2));
                     });
 
                     col.Item().Row(row =>
                     {
                         row.Spacing(10);
                         row.RelativeItem().Element(c =>
-                            MetricBox(c, "Neutral", neutral.ToString("n0"), "Share of all records", Colors.Grey.Darken2));
+                            MetricBox(c, "Neutral", neutral.ToString("n0"), $"Share: {FmtPct(neutral)}", Colors.Grey.Darken2));
                         row.RelativeItem().Element(c =>
                             MetricBox(c, "Integrity", chainValid ? "VALID" : "BROKEN",
                                 chainValid ? "No tampering detected" : $"Broken at index {brokenAt}",
                                 chainValid ? Colors.Green.Darken2 : Colors.Red.Darken2));
                         row.RelativeItem().Element(c =>
                             MetricBox(c, "Final hash", ShortHash(finalHash, 22), "Chain tail (summary)", Colors.Grey.Darken2));
+                    });
+
+                    col.Item().PaddingTop(6).Text("Method (MVP)").FontSize(14).Bold();
+                    col.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.ConstantColumn(150);
+                            c.RelativeColumn();
+                        });
+
+                        void Row(string k, string v)
+                        {
+                            table.Cell().PaddingVertical(3)
+                                .Text(k).FontSize(10).FontColor(Colors.Grey.Darken2).SemiBold();
+                            table.Cell().PaddingVertical(3)
+                                .Text(v).FontSize(10).FontColor(Colors.Grey.Darken4);
+                        }
+
+                        Row("Sentiment model", "TextBlob polarity score is computed per comment (-1.0 to 1.0).");
+                        Row("Sentiment labels", "Positive > 0.10, Negative < -0.10, otherwise Neutral.");
+                        Row("Score meaning", "Reported score is |polarity| rounded to 4 decimals (0.0000 to 1.0000).");
+                        Row("Category labels", "Rule-based keyword matching (Complaint, Praise, Question, Disappointment, Other).");
                     });
 
                     col.Item().PaddingTop(10).Text("Sentiment Distribution").FontSize(14).Bold();
@@ -204,7 +237,7 @@ public class PdfReportService : IReportService
                         bars.Item().Element(c => BarRow(c, "Complaint", complaint, total, "#f97316"));
                         bars.Item().Element(c => BarRow(c, "Question", question, total, "#22d3ee"));
                         bars.Item().Element(c => BarRow(c, "Praise", praise, total, "#a78bfa"));
-                        bars.Item().Element(c => BarRow(c, "Disappoint", disappointment, total, "#fb7185"));
+                        bars.Item().Element(c => BarRow(c, "Disappointment", disappointment, total, "#fb7185"));
                         if (other > 0)
                             bars.Item().Element(c => BarRow(c, "Other", other, total, "#94a3b8"));
                     });
@@ -214,6 +247,8 @@ public class PdfReportService : IReportService
                         col.Item().PaddingTop(14).Text("Top Repeated Comments").FontSize(14).Bold();
                         col.Item().Text("Helps identify recurring issues and repeated feedback patterns.")
                             .FontSize(10).FontColor(Colors.Grey.Darken1);
+                        col.Item().Text("Note: Category labels are keyword-based (MVP) and may include false positives.")
+                            .FontSize(9).FontColor(Colors.Grey.Medium);
 
                         col.Item().PaddingTop(4).Table(table =>
                         {
@@ -255,6 +290,8 @@ public class PdfReportService : IReportService
                             table.Cell().PaddingVertical(3).Text(v).FontSize(10).FontColor(Colors.Grey.Darken1);
                         }
 
+                        Row("Sentiment approach", "TextBlob polarity (MVP) + thresholds; designed for model replacement later.");
+                        Row("Category approach", "Keyword rules (MVP). False positives are possible; intent is explainability.");
                         Row("Pseudo-anonymization", "Identity fields are masked using deterministic keyed hashing (HMAC-SHA256).");
                         Row("Hash chain", "Each record stores prevHash/currentHash. Any DB change breaks the chain from that point.");
                         Row("Chain status", chainValid ? "VALID - No tampering detected" : $"BROKEN at index {brokenAt}");
