@@ -70,7 +70,7 @@ services:
     container_name: sg-web
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3010:80"
     depends_on:
       - backend
 
